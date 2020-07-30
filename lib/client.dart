@@ -7,12 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart';
 
 class HttpAuthClient implements http.Client {
-
   http.Client _httpClient;
   final SharedPreferences sharedPreferences;
 
   HttpAuthClient({http.Client client, @required this.sharedPreferences}) {
-    _httpClient = client is http.Client? client : http.Client(); 
+    _httpClient = client is http.Client ? client : http.Client();
   }
 
   @override
@@ -37,7 +36,7 @@ class HttpAuthClient implements http.Client {
 
   @override
   Future<http.Response> patch(url, {Map<String, String> headers, body, Encoding encoding}) {
-    return _httpClient.patch(url, headers: _getCustomHeaders(headers), body: body,encoding: encoding);
+    return _httpClient.patch(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
@@ -62,16 +61,43 @@ class HttpAuthClient implements http.Client {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
+    // http.BaseRequest newRequest;
+    if (request is http.MultipartRequest) {
+      return _httpClient.send(
+        http.MultipartRequest(
+          request.method,
+          request.url,
+        )
+          ..headers.addAll(
+            _getCustomHeaders(request.headers),
+          )
+          ..fields.addAll(request.fields ?? [])
+          ..files.addAll(request.files ?? []),
+      );
+    } else if (request is http.Request) {
+      return _httpClient.send(
+        http.Request(
+          request.method,
+          request.url,
+        )
+          ..headers.addAll(
+            _getCustomHeaders(request.headers),
+          )
+          ..body = request.body
+          ..bodyFields = request.bodyFields ?? Map<String, String>.from({})
+          ..bodyBytes = request.bodyBytes,
+      );
+    }
     return _httpClient.send(request);
   }
 
   Map<String, String> _getCustomHeaders(Map<String, String> headers) {
-    final Map<String, String> baseHeaders = headers is Map? headers : {};
+    final Map<String, String> baseHeaders = headers is Map ? headers : {};
     final authToken = _getToken();
-    if(baseHeaders.containsKey(AuthHttpClientKeys.noAuthenticateOverride)) {
+    if (baseHeaders.containsKey(AuthHttpClientKeys.noAuthenticateOverride)) {
       baseHeaders.remove(AuthHttpClientKeys.noAuthenticateOverride);
       return baseHeaders;
-    } else if(authToken != null) {
+    } else if (authToken != null) {
       baseHeaders.putIfAbsent("Authorization", () => "Bearer ${_getToken()}");
     }
     return baseHeaders;
@@ -80,5 +106,4 @@ class HttpAuthClient implements http.Client {
   _getToken() {
     return this.sharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthToken);
   }
-  
 }
