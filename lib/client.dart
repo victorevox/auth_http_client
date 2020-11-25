@@ -34,6 +34,9 @@ class HttpAuthClient implements http.Client {
   /// By default `1 second` period time is used
   final Duration refreshTokenDebounceTime;
 
+  /// This Callback is called whenever a refresh token have been successfull retrieved
+  final void Function(String token) onRefreshToken;
+
   StreamController _refreshController;
 
   HttpAuthClient({
@@ -44,6 +47,7 @@ class HttpAuthClient implements http.Client {
     this.refreshTokenMethod = "POST",
     this.maxAge = const Duration(days: 1),
     this.refreshTokenDebounceTime = const Duration(seconds: 1),
+    this.onRefreshToken,
   }) {
     if (refreshTokenUrl != null) {
       assert(refreshTokenMethod != null && refreshTokenMethod != "");
@@ -85,6 +89,7 @@ class HttpAuthClient implements http.Client {
 
           final response = await http.Response.fromStream(sres);
           final refreshedToken = onParseRefreshTokenResponse?.call(response.body);
+          onRefreshToken?.call(refreshedToken);
           _setToken(refreshedToken);
         });
       });

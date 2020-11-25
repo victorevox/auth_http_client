@@ -1,3 +1,7 @@
+## [0.0.4] - 24/11/20
+
+* Added `onRefreshToken` callback
+
 ## [0.0.3] - 15/09/20
 
 * Added `refreshToken` capability
