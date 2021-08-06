@@ -1,3 +1,6 @@
+## [1.0.1] - 06/08/21
+* Make refresh token fields not mandatory
+
 ## [1.0.0] - 06/08/21
 
 * Make Null-Safety
