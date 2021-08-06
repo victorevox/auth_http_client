@@ -41,7 +41,7 @@ class HttpAuthClient implements http.Client {
   HttpAuthClient({
     http.Client? client,
     required this.sharedPreferences,
-    required this.refreshTokenUrl,
+    this.refreshTokenUrl,
     this.onParseRefreshTokenResponse = _defaultParseRefreshTokenResponse,
     this.refreshTokenMethod = "POST",
     this.maxAge = const Duration(days: 1),
