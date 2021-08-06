@@ -4,12 +4,11 @@ import 'dart:typed_data';
 
 import 'package:corsac_jwt/corsac_jwt.dart';
 import 'package:http/http.dart' as http;
-import 'package:meta/meta.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart';
 
 class HttpAuthClient implements http.Client {
-  http.Client _httpClient;
+  late http.Client _httpClient;
   final SharedPreferences sharedPreferences;
 
   /// Defines a function to get the URL in which a new token can be requested
@@ -35,32 +34,27 @@ class HttpAuthClient implements http.Client {
   final Duration refreshTokenDebounceTime;
 
   /// This Callback is called whenever a refresh token have been successfull retrieved
-  final void Function(String token) onRefreshToken;
+  final void Function(String token)? onRefreshToken;
 
-  StreamController _refreshController;
+  late StreamController _refreshController;
 
   HttpAuthClient({
-    http.Client client,
-    @required this.sharedPreferences,
-    this.refreshTokenUrl,
+    http.Client? client,
+    required this.sharedPreferences,
+    required this.refreshTokenUrl,
     this.onParseRefreshTokenResponse = _defaultParseRefreshTokenResponse,
     this.refreshTokenMethod = "POST",
     this.maxAge = const Duration(days: 1),
     this.refreshTokenDebounceTime = const Duration(seconds: 1),
     this.onRefreshToken,
   }) {
-    if (refreshTokenUrl != null) {
-      assert(refreshTokenMethod != null && refreshTokenMethod != "");
-      assert(maxAge != null);
-      assert(onParseRefreshTokenResponse != null);
-    }
     _httpClient = client is http.Client ? client : http.Client();
     _refreshController = StreamController();
-    Timer debounceTimer;
+    Timer? debounceTimer;
     _refreshController.stream
       ..listen((_) async {
-        if (debounceTimer != null && debounceTimer.isActive) {
-          debounceTimer.cancel();
+        if (debounceTimer != null && debounceTimer!.isActive) {
+          debounceTimer?.cancel();
         }
         debounceTimer = Timer(Duration(seconds: 1), () async {
           final token = _getToken();
@@ -68,8 +62,8 @@ class HttpAuthClient implements http.Client {
             // it must be logged out, do nothing
             return;
           }
-          final decoded = JWT.parse(token);
-          final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.issuedAt * 1000);
+          final JWT decoded = JWT.parse(token);
+          final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.issuedAt! * 1000);
           final requestNew = issuedAt
               .add(
                 this.maxAge,
@@ -88,7 +82,7 @@ class HttpAuthClient implements http.Client {
           );
 
           final response = await http.Response.fromStream(sres);
-          final refreshedToken = onParseRefreshTokenResponse?.call(response.body);
+          final refreshedToken = onParseRefreshTokenResponse.call(response.body);
           onRefreshToken?.call(refreshedToken);
           _setToken(refreshedToken);
         });
@@ -101,49 +95,49 @@ class HttpAuthClient implements http.Client {
   }
 
   @override
-  Future<http.Response> delete(url, {Map<String, String> headers}) {
+  Future<http.Response> delete(url, {Map<String, String>? headers, Object? body, Encoding? encoding}) {
     _mayRefreshToken();
     return _httpClient.delete(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> get(url, {Map<String, String> headers}) {
+  Future<http.Response> get(url, {Map<String, String>? headers}) {
     _mayRefreshToken();
     return _httpClient.get(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> head(url, {Map<String, String> headers}) {
+  Future<http.Response> head(url, {Map<String, String>? headers}) {
     _mayRefreshToken();
     return _httpClient.head(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> patch(url, {Map<String, String> headers, body, Encoding encoding}) {
+  Future<http.Response> patch(url, {Map<String, String>? headers, body, Encoding? encoding}) {
     _mayRefreshToken();
     return _httpClient.patch(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<http.Response> post(url, {Map<String, String> headers, body, Encoding encoding}) {
+  Future<http.Response> post(url, {Map<String, String>? headers, body, Encoding? encoding}) {
     _mayRefreshToken();
     return _httpClient.post(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<http.Response> put(url, {Map<String, String> headers, body, Encoding encoding}) {
+  Future<http.Response> put(url, {Map<String, String>? headers, body, Encoding? encoding}) {
     _mayRefreshToken();
     return _httpClient.put(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<String> read(url, {Map<String, String> headers}) {
+  Future<String> read(url, {Map<String, String>? headers}) {
     _mayRefreshToken();
     return _httpClient.read(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<Uint8List> readBytes(url, {Map<String, String> headers}) {
+  Future<Uint8List> readBytes(url, {Map<String, String>? headers}) {
     _mayRefreshToken();
     return _httpClient.readBytes(url, headers: _getCustomHeaders(headers));
   }
@@ -160,8 +154,8 @@ class HttpAuthClient implements http.Client {
           ..headers.addAll(
             _getCustomHeaders(request.headers),
           )
-          ..fields.addAll(request.fields ?? [])
-          ..files.addAll(request.files ?? []),
+          ..fields.addAll(request.fields)
+          ..files.addAll(request.files),
       );
     } else if (request is http.Request) {
       return _httpClient.send(
@@ -173,15 +167,15 @@ class HttpAuthClient implements http.Client {
             _getCustomHeaders(request.headers),
           )
           ..body = request.body
-          ..bodyFields = request.bodyFields ?? Map<String, String>.from({})
+          ..bodyFields = request.bodyFields
           ..bodyBytes = request.bodyBytes,
       );
     }
     return _httpClient.send(request);
   }
 
-  Map<String, String> _getCustomHeaders(Map<String, String> headers) {
-    final Map<String, String> baseHeaders = headers is Map ? headers : {};
+  Map<String, String> _getCustomHeaders(Map<String, String>? headers) {
+    final Map<String, String> baseHeaders = headers?? {};
     final authToken = _getToken();
     if (baseHeaders.containsKey(AuthHttpClientKeys.noAuthenticateOverride)) {
       baseHeaders.remove(AuthHttpClientKeys.noAuthenticateOverride);

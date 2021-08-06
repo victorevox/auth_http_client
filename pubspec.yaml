@@ -1,23 +1,24 @@
 name: auth_http_client
 description: A new Flutter package project.
-version: 0.0.4
+version: 0.0.5
 author: null
 homepage: https://github.com/victorevox/auth_http_client
 
 environment:
-  sdk: ">=2.1.0 <3.0.0"
+  sdk: ">=2.12.0<3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  http: ^0.12.0+4
-  shared_preferences: ^0.5.6
-  corsac_jwt: ^0.2.2
+  http: ^0.13.3
+  shared_preferences: ^2.0.6
+  corsac_jwt: ^1.0.0-nullsafety.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mockito: ^4.1.1
+  mockito: ^5.0.14
+  build_runner: ^2.1.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
