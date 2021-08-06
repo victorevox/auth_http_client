@@ -13,13 +13,13 @@ class HttpAuthClient implements http.Client {
 
   /// Defines a function to get the URL in which a new token can be requested
   /// Defining this property activates the 'refreshToken' mechanism
-  final String Function(String token, JWT decodedToken) refreshTokenUrl;
+  final String Function(String token, JWT decodedToken)? refreshTokenUrl;
 
   /// Defines a custom function to parse the response of your refresh token API, you must return a valid
   /// JWT, so it can replace your current session one
-  final String Function(String body) onParseRefreshTokenResponse;
+  final String Function(String body)? onParseRefreshTokenResponse;
 
-  /// Defines the 'http' method to be used when requesting a new token to the API
+  /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
   final String refreshTokenMethod;
 
   /// Defines the JWT age thresshold in which the refresh token logic will trigger
@@ -74,17 +74,22 @@ class HttpAuthClient implements http.Client {
           if (!requestNew) {
             return;
           }
+
+          if (this.refreshTokenUrl == null) return;
+
           final sres = await this.send(
             http.Request(
               refreshTokenMethod,
-              Uri.parse(this.refreshTokenUrl(token, decoded)),
+              Uri.parse((this.refreshTokenUrl?.call(token, decoded))!),
             )..bodyFields = {},
           );
 
           final response = await http.Response.fromStream(sres);
-          final refreshedToken = onParseRefreshTokenResponse.call(response.body);
-          onRefreshToken?.call(refreshedToken);
-          _setToken(refreshedToken);
+          final refreshedToken = onParseRefreshTokenResponse?.call(response.body);
+          if (refreshedToken != null) {
+            onRefreshToken?.call(refreshedToken);
+            _setToken(refreshedToken);
+          }
         });
       });
   }
@@ -175,7 +180,7 @@ class HttpAuthClient implements http.Client {
   }
 
   Map<String, String> _getCustomHeaders(Map<String, String>? headers) {
-    final Map<String, String> baseHeaders = headers?? {};
+    final Map<String, String> baseHeaders = headers ?? {};
     final authToken = _getToken();
     if (baseHeaders.containsKey(AuthHttpClientKeys.noAuthenticateOverride)) {
       baseHeaders.remove(AuthHttpClientKeys.noAuthenticateOverride);
