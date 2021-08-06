@@ -1,3 +1,7 @@
+## [1.0.0] - 06/08/21
+
+* Make Null-Safety
+
 ## [0.0.4] - 24/11/20
 
 * Added `onRefreshToken` callback
