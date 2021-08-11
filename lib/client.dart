@@ -80,7 +80,7 @@ class HttpAuthClient implements http.Client {
           final sres = await this.send(
             http.Request(
               refreshTokenMethod,
-              Uri.parse((this.refreshTokenUrl?.call(token, decoded))!),
+              Uri.parse((this.refreshTokenUrl!.call(token, decoded))),
             )..bodyFields = {},
           );
 
