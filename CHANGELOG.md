@@ -1,3 +1,5 @@
+## [1.0.3] - 11/08/21
+* Some null check changes
 ## [1.0.2] - 06/08/21
 * Make refresh token fields not mandatory
 
