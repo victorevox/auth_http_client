@@ -17,21 +17,22 @@ class HttpAuthClient implements http.Client {
 
   /// Defines a custom function to parse the response of your refresh token API, you must return a valid
   /// JWT, so it can replace your current session one
-  final String Function(String body)? onParseRefreshTokenResponse;
+  late String Function(String body)? onParseRefreshTokenResponse;
 
   /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
-  final String refreshTokenMethod;
+  /// defaults to 'POST'
+  late String refreshTokenMethod;
 
   /// Defines the JWT age thresshold in which the refresh token logic will trigger
   ///
   /// By default `1 day` is used
-  final Duration maxAge;
+  late Duration maxAge;
 
   /// Every call to any [http.Client] method `post, put, delete, etc` will attempt to trigger the refresh token
   /// if applies, setting a `refreshTokenDebounceTime` will help to prevent excecive calls to the server
   ///
   /// By default `1 second` period time is used
-  final Duration refreshTokenDebounceTime;
+  late Duration refreshTokenDebounceTime;
 
   /// This Callback is called whenever a refresh token have been successfull retrieved
   final void Function(String token)? onRefreshToken;
@@ -42,12 +43,17 @@ class HttpAuthClient implements http.Client {
     http.Client? client,
     required this.sharedPreferences,
     this.refreshTokenUrl,
-    this.onParseRefreshTokenResponse = _defaultParseRefreshTokenResponse,
-    this.refreshTokenMethod = "POST",
-    this.maxAge = const Duration(days: 1),
-    this.refreshTokenDebounceTime = const Duration(seconds: 1),
+    onParseRefreshTokenResponse,
+    refreshTokenMethod,
+    maxAge,
+    refreshTokenDebounceTime,
     this.onRefreshToken,
   }) {
+    this.onParseRefreshTokenResponse = onParseRefreshTokenResponse ?? _defaultParseRefreshTokenResponse;
+    this.refreshTokenMethod = "POST";
+    this.maxAge = const Duration(days: 1);
+    this.refreshTokenDebounceTime = const Duration(seconds: 1);
+
     _httpClient = client is http.Client ? client : http.Client();
     _refreshController = StreamController();
     Timer? debounceTimer;
