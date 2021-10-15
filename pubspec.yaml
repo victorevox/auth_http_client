@@ -1,6 +1,6 @@
 name: auth_http_client
-description: A new Flutter package project.
-version: 1.0.3
+description: A package that provides an HttpClient with some useful Authorization capabilities
+version: 1.0.4
 author: null
 homepage: https://github.com/victorevox/auth_http_client
 
