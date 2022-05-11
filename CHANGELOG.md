@@ -1,3 +1,11 @@
+## [1.1.0] - 11/05/22
+* Reworked Refresh Token Logic
+* Deprecated properties:
+  * `refreshTokenDebounceTime`
+  *  Rename `onParseRefreshTokenResponse` -> `refreshTokenResponseParser`
+  *  Added `onRefreshTokenFailure`, `refreshTokenRequestBodyMapper`
+
+
 ## [1.0.4] - 15/10/21
 * Define default in different way
 
