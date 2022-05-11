@@ -15,89 +15,68 @@ class HttpAuthClient implements http.Client {
   /// Defining this property activates the 'refreshToken' mechanism
   final String Function(String token, JWT decodedToken)? refreshTokenUrl;
 
-  /// Defines a custom function to parse the response of your refresh token API, you must return a valid
-  /// JWT, so it can replace your current session one
-  late String Function(String body)? onParseRefreshTokenResponse;
+  /// Defines a custom function to parse the response of your refresh token API, you must return an object
+  /// with "refreshToken" and "authToken", so it can replace your current session one
+  /// Example
+  /// {
+  ///   "auth-token": "YourParsedAuthToken",
+  ///   "auth-refresh-token": "YourParsedRefreshToken"
+  /// }
+  late Map<String, String> Function(String body) refreshTokenResponseParser;
+
+  /// Provide a function to be used in order to use/pass the refresh token to the
+  /// API endpoint
+  late Map<String, String> Function(String refreshToken, String authToken) refreshTokenRequestBodyMapper;
 
   /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
   /// defaults to 'POST'
   late String refreshTokenMethod;
 
-  /// Defines the JWT age thresshold in which the refresh token logic will trigger
+  /// This value is used to compare against current time, so if this have a value of 1 minute, when checking if we should should
+  /// request for new token, it check that expiresAt property is before current time plus this value
   ///
-  /// By default `1 day` is used
+  /// By default `1 minute` is used
   late Duration maxAge;
 
-  /// Every call to any [http.Client] method `post, put, delete, etc` will attempt to trigger the refresh token
-  /// if applies, setting a `refreshTokenDebounceTime` will help to prevent excecive calls to the server
+  /// Define a custom period to wait for the refresh token API, after defined period if no response
+  /// the API call waiting for the token will throw
   ///
-  /// By default `1 second` period time is used
-  late Duration refreshTokenDebounceTime;
+  /// Defaults to 15 seconds
+  ///
+  late Duration refreshTokenTimeout;
 
-  /// This Callback is called whenever a refresh token have been successfull retrieved
-  final void Function(String token)? onRefreshToken;
+  /// This Callback is called whenever a refresh token have been successfully retrieved
+  /// It provides access to the retrieved tokens
+  final void Function(Map<String, String> tokens)? onRefreshToken;
 
-  late StreamController _refreshController;
+  /// This Callback is called whenever a refresh token fail to be retrieved
+  /// It provides access to the refresh token used & the exception raised
+  final void Function(String token, Object exception)? onRefreshTokenFailure;
+
+  late StreamController<bool> _refreshController;
+  bool _requestingNewToken = false;
 
   HttpAuthClient({
     http.Client? client,
     required this.sharedPreferences,
     this.refreshTokenUrl,
-    onParseRefreshTokenResponse,
-    refreshTokenMethod,
-    maxAge,
-    refreshTokenDebounceTime,
+    Map<String, String> Function(String body)? customRefreshTokenResponseParser,
+    String? refreshTokenMethod,
+    Duration? maxAge,
+    Duration? refreshTokenTimeout,
+    Map<String, String> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper,
     this.onRefreshToken,
+    this.onRefreshTokenFailure,
   }) {
-    this.onParseRefreshTokenResponse = onParseRefreshTokenResponse ?? _defaultParseRefreshTokenResponse;
+    this.refreshTokenResponseParser = customRefreshTokenResponseParser ?? _defaultRefreshTokenResponseParser;
     this.refreshTokenMethod = "POST";
-    this.maxAge = const Duration(days: 1);
-    this.refreshTokenDebounceTime = const Duration(seconds: 1);
+    this.maxAge = const Duration(minutes: 1);
+    this.refreshTokenRequestBodyMapper =
+        customRefreshTokenRequestBodyMapper ?? _defaultCustomRefreshTokenRequestBodyMapper;
+    this.refreshTokenTimeout = refreshTokenTimeout ?? const Duration(seconds: 15);
 
     _httpClient = client is http.Client ? client : http.Client();
-    _refreshController = StreamController();
-    Timer? debounceTimer;
-    _refreshController.stream
-      ..listen((_) async {
-        if (debounceTimer != null && debounceTimer!.isActive) {
-          debounceTimer?.cancel();
-        }
-        debounceTimer = Timer(Duration(seconds: 1), () async {
-          final token = _getToken();
-          if (token == null) {
-            // it must be logged out, do nothing
-            return;
-          }
-          final JWT decoded = JWT.parse(token);
-          final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.issuedAt! * 1000);
-          final requestNew = issuedAt
-              .add(
-                this.maxAge,
-              )
-              .isBefore(
-                DateTime.now(),
-              );
-          if (!requestNew) {
-            return;
-          }
-
-          if (this.refreshTokenUrl == null) return;
-
-          final sres = await this.send(
-            http.Request(
-              refreshTokenMethod,
-              Uri.parse((this.refreshTokenUrl!.call(token, decoded))),
-            )..bodyFields = {},
-          );
-
-          final response = await http.Response.fromStream(sres);
-          final refreshedToken = onParseRefreshTokenResponse?.call(response.body);
-          if (refreshedToken != null) {
-            onRefreshToken?.call(refreshedToken);
-            _setToken(refreshedToken);
-          }
-        });
-      });
+    _refreshController = StreamController.broadcast();
   }
 
   @override
@@ -106,56 +85,59 @@ class HttpAuthClient implements http.Client {
   }
 
   @override
-  Future<http.Response> delete(url, {Map<String, String>? headers, Object? body, Encoding? encoding}) {
-    _mayRefreshToken();
+  Future<http.Response> delete(url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async {
+    await _mayRefreshToken();
     return _httpClient.delete(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> get(url, {Map<String, String>? headers}) {
-    _mayRefreshToken();
+  Future<http.Response> get(url, {Map<String, String>? headers}) async {
+    await _mayRefreshToken();
     return _httpClient.get(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> head(url, {Map<String, String>? headers}) {
-    _mayRefreshToken();
+  Future<http.Response> head(url, {Map<String, String>? headers}) async {
+    await _mayRefreshToken();
     return _httpClient.head(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.Response> patch(url, {Map<String, String>? headers, body, Encoding? encoding}) {
-    _mayRefreshToken();
+  Future<http.Response> patch(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
+    await _mayRefreshToken();
     return _httpClient.patch(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<http.Response> post(url, {Map<String, String>? headers, body, Encoding? encoding}) {
-    _mayRefreshToken();
+  Future<http.Response> post(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
+    await _mayRefreshToken();
     return _httpClient.post(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<http.Response> put(url, {Map<String, String>? headers, body, Encoding? encoding}) {
-    _mayRefreshToken();
+  Future<http.Response> put(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
+    await _mayRefreshToken();
     return _httpClient.put(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
-  Future<String> read(url, {Map<String, String>? headers}) {
-    _mayRefreshToken();
+  Future<String> read(url, {Map<String, String>? headers}) async {
+    await _mayRefreshToken();
     return _httpClient.read(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<Uint8List> readBytes(url, {Map<String, String>? headers}) {
-    _mayRefreshToken();
+  Future<Uint8List> readBytes(url, {Map<String, String>? headers}) async {
+    await _mayRefreshToken();
     return _httpClient.readBytes(url, headers: _getCustomHeaders(headers));
   }
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
     // http.BaseRequest newRequest;
+    if (!_requestingNewToken) {
+      await _mayRefreshToken();
+    }
     if (request is http.MultipartRequest) {
       return _httpClient.send(
         http.MultipartRequest(
@@ -197,19 +179,128 @@ class HttpAuthClient implements http.Client {
     return baseHeaders;
   }
 
-  _getToken() {
+  String? _getToken() {
     return this.sharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthToken);
   }
 
-  _setToken(String token) {
-    this.sharedPreferences.setString(AuthHttpClientKeys.sharedPrefsAuthToken, token);
+  String? _getRefreshToken() {
+    return this.sharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthRefreshToken);
   }
 
-  _mayRefreshToken() async {
-    _refreshController.sink.add(null);
+  _setTokens(Map<String, String> tokens) {
+    this
+        .sharedPreferences
+        .setString(AuthHttpClientKeys.sharedPrefsAuthToken, tokens[AuthHttpClientKeys.sharedPrefsAuthToken]!);
+    if (tokens.containsKey(AuthHttpClientKeys.sharedPrefsAuthRefreshToken))
+      this.sharedPreferences.setString(
+          AuthHttpClientKeys.sharedPrefsAuthRefreshToken, tokens[AuthHttpClientKeys.sharedPrefsAuthRefreshToken]!);
+  }
+
+  Future<void> _mayRefreshToken() async {
+    if (_requestingNewToken) {
+      await _refreshController.stream.timeout(refreshTokenTimeout).first;
+    } else {
+      final refreshToken = _getRefreshToken();
+      final authToken = _getToken();
+      if (refreshToken == null) {
+        // it must be logged out, do nothing
+        return;
+      }
+
+      Timer? timer;
+
+      try {
+        _requestingNewToken = true;
+
+        final JWT decoded = JWT.parse(refreshToken);
+        final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.expiresAt! * 1000);
+        final requestNew = issuedAt
+            .add(
+              this.maxAge,
+            )
+            .isBefore(
+              DateTime.now(),
+            );
+        if (!requestNew) {
+          _requestingNewToken = false;
+          _refreshController.add(true);
+          return;
+        }
+
+        if (this.refreshTokenUrl == null) {
+          _requestingNewToken = false;
+          _refreshController.add(true);
+          return;
+        }
+
+        timer = Timer(refreshTokenTimeout, () {
+          throw TimeoutException("Refresh token was not retrieved after: $refreshTokenTimeout");
+        });
+
+        final sres = await this.send(
+          http.Request(
+            refreshTokenMethod,
+            Uri.parse((this.refreshTokenUrl!.call(refreshToken, decoded))),
+          )..bodyFields = refreshTokenRequestBodyMapper.call(refreshToken, authToken!),
+        );
+
+        timer.cancel();
+
+        final response = await http.Response.fromStream(sres);
+        final data = refreshTokenResponseParser.call(response.body);
+        if (data.containsKey(AuthHttpClientKeys.sharedPrefsAuthToken)) {
+          _setTokens(data);
+          onRefreshToken?.call(data);
+          _requestingNewToken = false;
+          _refreshController.add(true);
+        } else {
+          throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}");
+        }
+      } catch (e) {
+        timer?.cancel();
+        print(e);
+        _requestingNewToken = false;
+        this._refreshController.add(true);
+        onRefreshTokenFailure?.call(refreshToken, e);
+        return;
+      }
+    }
   }
 }
 
-String _defaultParseRefreshTokenResponse(String body) {
-  return jsonDecode(body)["data"];
+Map<String, String> _defaultRefreshTokenResponseParser(String body) {
+  final Map<String, dynamic> decoded = jsonDecode(body);
+  final Map<String, String> tokens = {};
+  Map<String, dynamic> data;
+
+  if (decoded.containsKey("data") && decoded["data"] is Object && !decoded.containsKey("authToken")) {
+    data = decoded["data"];
+  } else if (decoded.containsKey("data") && decoded["data"] is String) {
+    data = {
+      "authToken": decoded["data"],
+    };
+  } else {
+    data = decoded;
+  }
+
+  if (data.containsKey("authToken")) {
+    tokens
+      ..addAll({
+        AuthHttpClientKeys.sharedPrefsAuthToken: data["authToken"],
+      });
+  }
+
+  if (data.containsKey("refreshToken")) {
+    tokens
+      ..addAll({
+        AuthHttpClientKeys.sharedPrefsAuthRefreshToken: data["refreshToken"],
+      });
+  }
+  return tokens;
+}
+
+Map<String, String> _defaultCustomRefreshTokenRequestBodyMapper(String refreshToken, String accessToken) {
+  return {
+    "refreshToken": refreshToken,
+  };
 }

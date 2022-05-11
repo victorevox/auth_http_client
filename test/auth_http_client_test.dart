@@ -10,18 +10,25 @@ void main() {
   late MockSharedPreferences mockSharedPreferences;
   // We mockup a http client so that way we can spy on it
   late MockHttpClient mockHttpClient;
-  final String mockToken = "TOKEN";
+  final String mockToken = "token";
   final Uri mockApiPath = Uri.dataFromString("https://test.com/api");
   final authenticationHeaders = {"Authorization": "Bearer $mockToken"};
+  final refreshTokenUrl = mockApiPath.toString() + "/refresh";
+
+  setUpSharedPreferencesSet() {
+    when(mockSharedPreferences.setString(any, any)).thenAnswer((realInvocation) async => true);
+  }
 
   setUp(() {
     mockSharedPreferences = MockSharedPreferences();
     mockHttpClient = MockHttpClient();
     authClient = HttpAuthClient(
-      sharedPreferences: mockSharedPreferences,
-      client: mockHttpClient,
-      refreshTokenUrl: (_, __) => "test",
-    );
+        sharedPreferences: mockSharedPreferences,
+        client: mockHttpClient,
+        refreshTokenUrl: (_, __) => refreshTokenUrl,
+        refreshTokenMethod: "POST");
+
+    setUpSharedPreferencesSet();
   });
 
   setUpStubsOnHttpClient() {
@@ -70,12 +77,15 @@ void main() {
     });
   }
 
-  setUpMockSharedPreferenceAsAuthenticated() {
-    when(mockSharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthToken)).thenReturn(mockToken);
+  setUpMockSharedPreferenceAsAuthenticated([String? customToken]) {
+    when(mockSharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthToken)).thenReturn(customToken ?? mockToken);
+    when(mockSharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthRefreshToken))
+        .thenReturn(customToken ?? mockToken);
   }
 
   setUpMockSharedPreferenceAsNotAuthenticated() {
     when(mockSharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthToken)).thenReturn(null);
+    when(mockSharedPreferences.getString(AuthHttpClientKeys.sharedPrefsAuthRefreshToken)).thenReturn(null);
   }
 
   group("Http client methods when authenticated", () {
@@ -83,7 +93,7 @@ void main() {
       setUpMockSharedPreferenceAsAuthenticated();
       setUpStubsOnHttpClient();
     });
-    test("should set ${AuthHttpClientKeys.authorizationHeader} Header To 'Bearer $mockToken'", () {
+    test("should set ${AuthHttpClientKeys.authorizationHeader} Header To 'Bearer $mockToken'", () async {
       // act
       authClient.head(mockApiPath);
       authClient.get(mockApiPath);
@@ -91,6 +101,7 @@ void main() {
       authClient.post(mockApiPath);
       authClient.patch(mockApiPath);
       // assert
+      await Future.delayed(Duration(milliseconds: 100));
       verify(mockHttpClient.head(mockApiPath, headers: authenticationHeaders));
       verify(mockHttpClient.get(mockApiPath, headers: authenticationHeaders));
       verify(mockHttpClient.put(mockApiPath, headers: authenticationHeaders));
@@ -100,7 +111,7 @@ void main() {
 
     test(
         "should not set ${AuthHttpClientKeys.authorizationHeader} Header if ${AuthHttpClientKeys.noAuthenticateOverride} header is set",
-        () {
+        () async {
       // act
       authClient.head(mockApiPath, headers: {"${AuthHttpClientKeys.noAuthenticateOverride}": ""});
       authClient.get(mockApiPath, headers: {"${AuthHttpClientKeys.noAuthenticateOverride}": ""});
@@ -108,6 +119,7 @@ void main() {
       authClient.post(mockApiPath, headers: {"${AuthHttpClientKeys.noAuthenticateOverride}": ""});
       authClient.patch(mockApiPath, headers: {"${AuthHttpClientKeys.noAuthenticateOverride}": ""});
       // assert
+      await Future.delayed(Duration(milliseconds: 100));
       verify(mockHttpClient.head(mockApiPath, headers: {}));
       verify(mockHttpClient.get(mockApiPath, headers: {}));
       verify(mockHttpClient.put(mockApiPath, headers: {}));
@@ -121,7 +133,7 @@ void main() {
       setUpMockSharedPreferenceAsNotAuthenticated();
       setUpStubsOnHttpClient();
     });
-    test("should not set Authorization Header when token is not available", () {
+    test("should not set Authorization Header when token is not available", () async {
       // act
       authClient.head(mockApiPath);
       authClient.get(mockApiPath);
@@ -129,11 +141,81 @@ void main() {
       authClient.post(mockApiPath);
       authClient.patch(mockApiPath);
       // assert
+      await Future.delayed(Duration(milliseconds: 100));
       verify(mockHttpClient.head(mockApiPath, headers: {}));
       verify(mockHttpClient.get(mockApiPath, headers: {}));
       verify(mockHttpClient.put(mockApiPath, headers: {}));
       verify(mockHttpClient.post(mockApiPath, headers: {}));
       verify(mockHttpClient.patch(mockApiPath, headers: {}));
+    });
+  });
+
+  group("refreshLogic", () {
+    setUp(() {
+      setUpMockSharedPreferenceAsAuthenticated(
+        // this token is already expired
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyLCJleHAiOjE1MTYyMzkwMjJ9.4Adcj3UFYzPUVaVF43FmMab6RlaQD8A9V8wFzzht-KQ",
+      );
+
+      setUpStubsOnHttpClient();
+
+      when(
+        mockHttpClient.send(any),
+      ).thenAnswer((realInvocation) async {
+        return StreamedResponse(
+          Stream.value(
+            """{
+  "user": {
+    "email": "string",
+    "phone": "string",
+    "firstName": "string",
+    "lastName": "string",
+    "country": "string",
+    "profilePictureUrl": "string",
+    "authProviders": [
+      "string"
+    ]
+  },
+  "authToken": "authToken",
+  "refreshToken": "refreshToken"
+}
+"""
+                .codeUnits,
+          ),
+          200,
+        );
+      });
+    });
+
+    test("refresh api to be called", () async {
+      authClient.get(mockApiPath);
+      authClient.put(mockApiPath);
+
+      // assert
+      await Future.delayed(Duration(milliseconds: 300));
+      verify(mockHttpClient.send(
+        argThat(
+          TypeMatcher<BaseRequest>()
+              .having(
+                (p0) => p0.url.toString(),
+                "refresh API url",
+                refreshTokenUrl,
+              )
+              .having(
+                (p0) => p0.method,
+                "method",
+                "POST",
+              ),
+        ),
+      )).called(1);
+      verify(mockHttpClient.get(
+        mockApiPath,
+        headers: anyNamed("headers"),
+      ));
+      verify(mockHttpClient.put(
+        mockApiPath,
+        headers: anyNamed("headers"),
+      ));
     });
   });
 }
