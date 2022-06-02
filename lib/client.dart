@@ -202,8 +202,17 @@ class HttpAuthClient implements http.Client {
     } else {
       final refreshToken = _getRefreshToken();
       final authToken = _getToken();
-      if (refreshToken == null) {
+      if (authToken == null) {
         // it must be logged out, do nothing
+        return;
+      }
+
+      if (refreshToken == null) {
+        if (refreshTokenUrl != null) {
+          print(
+            "Authentication Session cannot be refreshed because not refresh token is present in shared_preferences",
+          );
+        }
         return;
       }
 
@@ -212,7 +221,7 @@ class HttpAuthClient implements http.Client {
       try {
         _requestingNewToken = true;
 
-        final JWT decoded = JWT.parse(refreshToken);
+        final JWT decoded = JWT.parse(authToken);
         final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.expiresAt! * 1000);
         final requestNew = issuedAt
             .add(
@@ -241,7 +250,7 @@ class HttpAuthClient implements http.Client {
           http.Request(
             refreshTokenMethod,
             Uri.parse((this.refreshTokenUrl!.call(refreshToken, decoded))),
-          )..bodyFields = refreshTokenRequestBodyMapper.call(refreshToken, authToken!),
+          )..bodyFields = refreshTokenRequestBodyMapper.call(refreshToken, authToken),
         );
 
         timer.cancel();
