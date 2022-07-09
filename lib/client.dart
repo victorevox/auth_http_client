@@ -159,11 +159,11 @@ class HttpAuthClient implements http.Client {
         );
       String? contentType = newRequest.headers["content-type"];
       if (request.body != "") {
-        request.body = request.body;
+        newRequest.body = request.body;
       } else if (contentType == "application/x-www-form-urlencoded" && request.bodyFields.isNotEmpty) {
-        request.bodyFields = request.bodyFields;
+        newRequest.bodyFields = request.bodyFields;
       } else if (request.bodyBytes.isNotEmpty) {
-        request.bodyBytes = request.bodyBytes;
+        newRequest.bodyBytes = request.bodyBytes;
       }
       return _httpClient.send(
         newRequest,
