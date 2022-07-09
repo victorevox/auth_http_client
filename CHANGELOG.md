@@ -1,3 +1,7 @@
+## [1.1.2] - 2/07/22
+* Fix crash on .send method
+  When trying to access `request.bodyFields`
+
 ## [1.1.1] - 2/06/22
 * Small  fix in refresh logic 
 
