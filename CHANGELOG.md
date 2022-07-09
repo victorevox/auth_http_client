@@ -1,4 +1,4 @@
-## [1.1.2] - 2/07/22
+## [1.1.3] - 2/07/22
 * Fix crash on .send method
   When trying to access `request.bodyFields`
 
