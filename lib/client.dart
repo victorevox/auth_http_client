@@ -151,17 +151,22 @@ class HttpAuthClient implements http.Client {
           ..files.addAll(request.files),
       );
     } else if (request is http.Request) {
+      http.Request newRequest = http.Request(
+        request.method,
+        request.url,
+      )..headers.addAll(
+          _getCustomHeaders(request.headers),
+        );
+      String? contentType = newRequest.headers["content-type"];
+      if (request.body != "") {
+        request.body = request.body;
+      } else if (contentType == "application/x-www-form-urlencoded" && request.bodyFields.isNotEmpty) {
+        request.bodyFields = request.bodyFields;
+      } else if (request.bodyBytes.isNotEmpty) {
+        request.bodyBytes = request.bodyBytes;
+      }
       return _httpClient.send(
-        http.Request(
-          request.method,
-          request.url,
-        )
-          ..headers.addAll(
-            _getCustomHeaders(request.headers),
-          )
-          ..body = request.body
-          ..bodyFields = request.bodyFields
-          ..bodyBytes = request.bodyBytes,
+        newRequest,
       );
     }
     return _httpClient.send(request);

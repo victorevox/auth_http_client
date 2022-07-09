@@ -218,4 +218,46 @@ void main() {
       ));
     });
   });
+
+  group("misc", () {
+    setUp(() {
+      setUpMockSharedPreferenceAsNotAuthenticated();
+      setUpStubsOnHttpClient();
+      when(
+        mockHttpClient.send(any),
+      ).thenAnswer((realInvocation) async {
+        return StreamedResponse(
+          Stream.value(
+            """{
+  "user": {
+    "email": "string",
+    "phone": "string",
+    "firstName": "string",
+    "lastName": "string",
+    "country": "string",
+    "profilePictureUrl": "string",
+    "authProviders": [
+      "string"
+    ]
+  },
+  "authToken": "authToken",
+  "refreshToken": "refreshToken"
+}
+"""
+                .codeUnits,
+          ),
+          200,
+        );
+      });
+    });
+    test("send $Request", () async {
+      final request = Request(
+        "POST",
+        Uri.parse("https://google.com"),
+      );
+
+      await authClient.send(request);
+      // mockHttpClient.
+    });
+  });
 }
