@@ -1,3 +1,6 @@
+## [1.1.4] - 8/08/22
+* Improve error log in [HttpAuthClient]
+
 ## [1.1.3] - 2/07/22
 * Fix crash on .send method
   When trying to access `request.bodyFields`
