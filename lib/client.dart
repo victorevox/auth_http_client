@@ -268,7 +268,7 @@ class HttpAuthClient implements http.Client {
           _requestingNewToken = false;
           _refreshController.add(true);
         } else {
-          throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}");
+          throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}, from response: ${response.body}");
         }
       } catch (e) {
         timer?.cancel();
