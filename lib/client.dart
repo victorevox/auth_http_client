@@ -32,12 +32,6 @@ class HttpAuthClient implements http.Client {
   /// defaults to 'POST'
   late String refreshTokenMethod;
 
-  /// This value is used to compare against current time, so if this have a value of 1 minute, when checking if we should should
-  /// request for new token, it check that expiresAt property is before current time plus this value
-  ///
-  /// By default `1 minute` is used
-  late Duration maxAge;
-
   /// Define a custom period to wait for the refresh token API, after defined period if no response
   /// the API call waiting for the token will throw
   ///
@@ -70,7 +64,6 @@ class HttpAuthClient implements http.Client {
   }) {
     this.refreshTokenResponseParser = customRefreshTokenResponseParser ?? _defaultRefreshTokenResponseParser;
     this.refreshTokenMethod = "POST";
-    this.maxAge = const Duration(minutes: 1);
     this.refreshTokenRequestBodyMapper =
         customRefreshTokenRequestBodyMapper ?? _defaultCustomRefreshTokenRequestBodyMapper;
     this.refreshTokenTimeout = refreshTokenTimeout ?? const Duration(seconds: 15);
@@ -221,20 +214,17 @@ class HttpAuthClient implements http.Client {
         return;
       }
 
-      Timer? timer;
-
       try {
         _requestingNewToken = true;
 
         final JWT decoded = JWT.parse(authToken);
-        final issuedAt = DateTime.fromMillisecondsSinceEpoch(decoded.expiresAt! * 1000);
-        final requestNew = issuedAt
-            .add(
-              this.maxAge,
-            )
-            .isBefore(
-              DateTime.now(),
-            );
+        final num exp = decoded.expiresAt! * 1000;
+        final expiresAt = DateTime.fromMillisecondsSinceEpoch(
+          exp.toInt(),
+        );
+        final requestNew = DateTime.now().isAfter(
+          expiresAt,
+        );
         if (!requestNew) {
           _requestingNewToken = false;
           _refreshController.add(true);
@@ -247,18 +237,22 @@ class HttpAuthClient implements http.Client {
           return;
         }
 
-        timer = Timer(refreshTokenTimeout, () {
-          throw TimeoutException("Refresh token was not retrieved after: $refreshTokenTimeout");
-        });
-
-        final sres = await this.send(
+        final sres = await this
+            .send(
           http.Request(
             refreshTokenMethod,
             Uri.parse((this.refreshTokenUrl!.call(refreshToken, decoded))),
           )..bodyFields = refreshTokenRequestBodyMapper.call(refreshToken, authToken),
+        )
+            .timeout(
+          refreshTokenTimeout,
+          onTimeout: () {
+            throw TimeoutException(
+              "Refresh token was not retrieved after: $refreshTokenTimeout",
+              refreshTokenTimeout,
+            );
+          },
         );
-
-        timer.cancel();
 
         final response = await http.Response.fromStream(sres);
         final data = refreshTokenResponseParser.call(response.body);
@@ -271,7 +265,6 @@ class HttpAuthClient implements http.Client {
           throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}, from response: ${response.body}");
         }
       } catch (e) {
-        timer?.cancel();
         print(e);
         _requestingNewToken = false;
         this._refreshController.add(true);
