@@ -1,3 +1,6 @@
+## [1.1.5] - 8/08/22
+* Improve refresh token logic 
+
 ## [1.1.4] - 8/08/22
 * Improve error log in [HttpAuthClient]
 
