@@ -214,6 +214,10 @@ class HttpAuthClient implements http.Client {
         return;
       }
 
+      if (_requestingNewToken) {
+        await _refreshController.stream.timeout(refreshTokenTimeout).first;
+      }
+
       try {
         _requestingNewToken = true;
 
