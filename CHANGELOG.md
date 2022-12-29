@@ -1,3 +1,6 @@
+## [1.1.6] - 29/12/22
+* Small change on refresh token logic
+
 ## [1.1.5] - 8/08/22
 * Improve refresh token logic 
 
