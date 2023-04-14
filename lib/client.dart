@@ -22,11 +22,11 @@ class HttpAuthClient implements http.Client {
   ///   "auth-token": "YourParsedAuthToken",
   ///   "auth-refresh-token": "YourParsedRefreshToken"
   /// }
-  late Map<String, String> Function(String body) refreshTokenResponseParser;
+  late FutureOr<Map<String, String>> Function(String body) refreshTokenResponseParser;
 
   /// Provide a function to be used in order to use/pass the refresh token to the
   /// API endpoint
-  late Map<String, String> Function(String refreshToken, String authToken) refreshTokenRequestBodyMapper;
+  late FutureOr<Map<String, String>> Function(String refreshToken, String authToken) refreshTokenRequestBodyMapper;
 
   /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
   /// defaults to 'POST'
@@ -54,11 +54,11 @@ class HttpAuthClient implements http.Client {
     http.Client? client,
     required this.sharedPreferences,
     this.refreshTokenUrl,
-    Map<String, String> Function(String body)? customRefreshTokenResponseParser,
+    FutureOr<Map<String, String>> Function(String body)? customRefreshTokenResponseParser,
     String? refreshTokenMethod,
     Duration? maxAge,
     Duration? refreshTokenTimeout,
-    Map<String, String> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper,
+    FutureOr<Map<String, String>> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper,
     this.onRefreshToken,
     this.onRefreshTokenFailure,
   }) {
@@ -246,7 +246,7 @@ class HttpAuthClient implements http.Client {
           http.Request(
             refreshTokenMethod,
             Uri.parse((this.refreshTokenUrl!.call(refreshToken, decoded))),
-          )..bodyFields = refreshTokenRequestBodyMapper.call(refreshToken, authToken),
+          )..bodyFields = await refreshTokenRequestBodyMapper.call(refreshToken, authToken),
         )
             .timeout(
           refreshTokenTimeout,
@@ -259,7 +259,7 @@ class HttpAuthClient implements http.Client {
         );
 
         final response = await http.Response.fromStream(sres);
-        final data = refreshTokenResponseParser.call(response.body);
+        final data = await refreshTokenResponseParser.call(response.body);
         if (data.containsKey(AuthHttpClientKeys.sharedPrefsAuthToken)) {
           _setTokens(data);
           onRefreshToken?.call(data);
