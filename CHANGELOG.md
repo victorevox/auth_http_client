@@ -1,3 +1,6 @@
+## [1.2.0] - 14/04/23
+* Allow async code logic on mappers and parsers
+
 ## [1.1.6] - 29/12/22
 * Small change on refresh token logic
 
