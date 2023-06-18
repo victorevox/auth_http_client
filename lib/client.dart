@@ -235,14 +235,17 @@ class HttpAuthClient implements http.Client {
         }
 
         if (refreshToken == null && customRefreshTokenCallback == null) {
+          print(
+            "Authentication Session cannot be refreshed because not refresh token is present in shared_preferences",
+          );
           _requestingNewToken = false;
           _refreshController.add(true);
           return;
         }
 
-        if (this.refreshTokenUrl == null) {
+        if (this.refreshTokenUrl == null && customRefreshTokenCallback == null) {
           print(
-            "Authentication Session cannot be refreshed because not refresh token is present in shared_preferences",
+            "Authentication 'refreshTokenUrl' is not defined cannot perform refresh logic",
           );
           _requestingNewToken = false;
           _refreshController.add(true);
