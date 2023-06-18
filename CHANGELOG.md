@@ -1,4 +1,4 @@
-## [1.2.1] - 18/06/23
+## [1.2.2] - 18/06/23
 * Allow async code logic on mappers and parsers
   
 ## [1.2.0] - 14/04/23
