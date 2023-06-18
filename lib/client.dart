@@ -47,6 +47,10 @@ class HttpAuthClient implements http.Client {
   /// It provides access to the refresh token used & the exception raised
   final void Function(String token, Object exception)? onRefreshTokenFailure;
 
+  /// This Callback is called whenever a refresh token is needed, this a way to implement any custom logic
+  /// if user wants to call a 3rd part SDK in order to gain the new token, etc
+  final FutureOr<Map<String, String>> Function(String token, String? refreshToken)? customRefreshTokenCallback;
+
   late StreamController<bool> _refreshController;
   bool _requestingNewToken = false;
 
@@ -61,7 +65,11 @@ class HttpAuthClient implements http.Client {
     FutureOr<Map<String, String>> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper,
     this.onRefreshToken,
     this.onRefreshTokenFailure,
-  }) {
+    this.customRefreshTokenCallback,
+  }) : assert(
+          refreshTokenUrl == null || customRefreshTokenCallback == null,
+          "You cannot define both 'refreshTokenUrl' & 'customRefreshTokenCallback' since the latest will override refresh logic behavior",
+        ) {
     this.refreshTokenResponseParser = customRefreshTokenResponseParser ?? _defaultRefreshTokenResponseParser;
     this.refreshTokenMethod = "POST";
     this.refreshTokenRequestBodyMapper =
@@ -205,15 +213,6 @@ class HttpAuthClient implements http.Client {
         return;
       }
 
-      if (refreshToken == null) {
-        if (refreshTokenUrl != null) {
-          print(
-            "Authentication Session cannot be refreshed because not refresh token is present in shared_preferences",
-          );
-        }
-        return;
-      }
-
       if (_requestingNewToken) {
         await _refreshController.stream.timeout(refreshTokenTimeout).first;
       }
@@ -235,44 +234,59 @@ class HttpAuthClient implements http.Client {
           return;
         }
 
-        if (this.refreshTokenUrl == null) {
+        if (refreshToken == null && customRefreshTokenCallback == null) {
           _requestingNewToken = false;
           _refreshController.add(true);
           return;
         }
 
-        final sres = await this
-            .send(
-          http.Request(
-            refreshTokenMethod,
-            Uri.parse((this.refreshTokenUrl!.call(refreshToken, decoded))),
-          )..bodyFields = await refreshTokenRequestBodyMapper.call(refreshToken, authToken),
-        )
-            .timeout(
-          refreshTokenTimeout,
-          onTimeout: () {
-            throw TimeoutException(
-              "Refresh token was not retrieved after: $refreshTokenTimeout",
-              refreshTokenTimeout,
-            );
-          },
-        );
+        if (this.refreshTokenUrl == null) {
+          print(
+            "Authentication Session cannot be refreshed because not refresh token is present in shared_preferences",
+          );
+          _requestingNewToken = false;
+          _refreshController.add(true);
+          return;
+        }
 
-        final response = await http.Response.fromStream(sres);
-        final data = await refreshTokenResponseParser.call(response.body);
+        Map<String, String> data;
+        http.Response? response;
+        if (customRefreshTokenCallback != null) {
+          data = await (customRefreshTokenCallback!(authToken, refreshToken));
+        } else {
+          final sres = await this
+              .send(
+            http.Request(
+              refreshTokenMethod,
+              Uri.parse((this.refreshTokenUrl!.call(refreshToken!, decoded))),
+            )..bodyFields = await refreshTokenRequestBodyMapper.call(refreshToken, authToken),
+          )
+              .timeout(
+            refreshTokenTimeout,
+            onTimeout: () {
+              throw TimeoutException(
+                "Refresh token was not retrieved after: $refreshTokenTimeout",
+                refreshTokenTimeout,
+              );
+            },
+          );
+
+          response = await http.Response.fromStream(sres);
+          data = await refreshTokenResponseParser.call(response.body);
+        }
         if (data.containsKey(AuthHttpClientKeys.sharedPrefsAuthToken)) {
           _setTokens(data);
           onRefreshToken?.call(data);
           _requestingNewToken = false;
           _refreshController.add(true);
         } else {
-          throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}, from response: ${response.body}");
+          throw Exception("Invalid refresh tokens data parsed, ${jsonEncode(data)}, from response: ${response?.body}");
         }
       } catch (e) {
         print(e);
         _requestingNewToken = false;
         this._refreshController.add(true);
-        onRefreshTokenFailure?.call(refreshToken, e);
+        onRefreshTokenFailure?.call(refreshToken ?? "", e);
         return;
       }
     }
