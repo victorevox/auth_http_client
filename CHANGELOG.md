@@ -1,3 +1,6 @@
+## [1.2.3] - 21/06/23
+* Not attempt to refresh if AuthHttpClientKeys.noAuthenticateOverride passed
+
 ## [1.2.2] - 18/06/23
 * Allow async code logic on mappers and parsers
   
