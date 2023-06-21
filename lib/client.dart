@@ -87,49 +87,49 @@ class HttpAuthClient implements http.Client {
 
   @override
   Future<http.Response> delete(url, {Map<String, String>? headers, Object? body, Encoding? encoding}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.delete(url, headers: _getCustomHeaders(headers));
   }
 
   @override
   Future<http.Response> get(url, {Map<String, String>? headers}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.get(url, headers: _getCustomHeaders(headers));
   }
 
   @override
   Future<http.Response> head(url, {Map<String, String>? headers}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.head(url, headers: _getCustomHeaders(headers));
   }
 
   @override
   Future<http.Response> patch(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.patch(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
   Future<http.Response> post(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.post(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
   Future<http.Response> put(url, {Map<String, String>? headers, body, Encoding? encoding}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.put(url, headers: _getCustomHeaders(headers), body: body, encoding: encoding);
   }
 
   @override
   Future<String> read(url, {Map<String, String>? headers}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.read(url, headers: _getCustomHeaders(headers));
   }
 
   @override
   Future<Uint8List> readBytes(url, {Map<String, String>? headers}) async {
-    await _mayRefreshToken();
+    await _mayRefreshToken(headers);
     return _httpClient.readBytes(url, headers: _getCustomHeaders(headers));
   }
 
@@ -137,7 +137,7 @@ class HttpAuthClient implements http.Client {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     // http.BaseRequest newRequest;
     if (!_requestingNewToken) {
-      await _mayRefreshToken();
+      await _mayRefreshToken(request.headers);
     }
     if (request is http.MultipartRequest) {
       return _httpClient.send(
@@ -202,7 +202,11 @@ class HttpAuthClient implements http.Client {
           AuthHttpClientKeys.sharedPrefsAuthRefreshToken, tokens[AuthHttpClientKeys.sharedPrefsAuthRefreshToken]!);
   }
 
-  Future<void> _mayRefreshToken() async {
+  Future<void> _mayRefreshToken(Map<String, String>? headers) async {
+    // if user have pass the noAuthOverride not need to attempt to refresh auth
+    if (headers != null && headers.containsKey(AuthHttpClientKeys.noAuthenticateOverride)) {
+      return;
+    }
     if (_requestingNewToken) {
       await _refreshController.stream.timeout(refreshTokenTimeout).first;
     } else {
