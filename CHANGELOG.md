@@ -1,3 +1,7 @@
+## [1.3.0] - 21/06/23
+* Added 'customRefreshTokenRequestBodyMapper'
+* Renamed  refreshTokenRequestBodyMapper to refreshTokenRequestBodyFieldsMapper
+
 ## [1.2.3] - 21/06/23
 * Not attempt to refresh if AuthHttpClientKeys.noAuthenticateOverride passed
 
