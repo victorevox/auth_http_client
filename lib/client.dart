@@ -25,8 +25,13 @@ class HttpAuthClient implements http.Client {
   late FutureOr<Map<String, String>> Function(String body) refreshTokenResponseParser;
 
   /// Provide a function to be used in order to use/pass the refresh token to the
-  /// API endpoint
-  late FutureOr<Map<String, String>> Function(String refreshToken, String authToken) refreshTokenRequestBodyMapper;
+  /// API endpoint using Client.bodyFields
+  late FutureOr<Map<String, String>> Function(String refreshToken, String authToken)
+      refreshTokenRequestBodyFieldsMapper;
+
+  /// Provide a function to be used in order to use/pass the refresh token to the
+  /// API endpoint using Client.body
+  late FutureOr<String> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper;
 
   /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
   /// defaults to 'POST'
@@ -62,7 +67,9 @@ class HttpAuthClient implements http.Client {
     String? refreshTokenMethod,
     Duration? maxAge,
     Duration? refreshTokenTimeout,
-    FutureOr<Map<String, String>> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper,
+    FutureOr<Map<String, String>> Function(String refreshToken, String authToken)?
+        customRefreshTokenRequestBodyFieldsMapper,
+    this.customRefreshTokenRequestBodyMapper,
     this.onRefreshToken,
     this.onRefreshTokenFailure,
     this.customRefreshTokenCallback,
@@ -72,8 +79,8 @@ class HttpAuthClient implements http.Client {
         ) {
     this.refreshTokenResponseParser = customRefreshTokenResponseParser ?? _defaultRefreshTokenResponseParser;
     this.refreshTokenMethod = "POST";
-    this.refreshTokenRequestBodyMapper =
-        customRefreshTokenRequestBodyMapper ?? _defaultCustomRefreshTokenRequestBodyMapper;
+    this.refreshTokenRequestBodyFieldsMapper =
+        customRefreshTokenRequestBodyFieldsMapper ?? _defaultCustomRefreshTokenRequestBodyFieldsMapper;
     this.refreshTokenTimeout = refreshTokenTimeout ?? const Duration(seconds: 15);
 
     _httpClient = client is http.Client ? client : http.Client();
@@ -261,12 +268,20 @@ class HttpAuthClient implements http.Client {
         if (customRefreshTokenCallback != null) {
           data = await (customRefreshTokenCallback!(authToken, refreshToken));
         } else {
+          final request = http.Request(
+            refreshTokenMethod,
+            Uri.parse((this.refreshTokenUrl!.call(refreshToken!, decoded))),
+          );
+
+          if (customRefreshTokenRequestBodyMapper != null) {
+            request.body = await customRefreshTokenRequestBodyMapper!(refreshToken, authToken);
+          } else {
+            request.bodyFields = await refreshTokenRequestBodyFieldsMapper(refreshToken, authToken);
+          }
+
           final sres = await this
               .send(
-            http.Request(
-              refreshTokenMethod,
-              Uri.parse((this.refreshTokenUrl!.call(refreshToken!, decoded))),
-            )..bodyFields = await refreshTokenRequestBodyMapper.call(refreshToken, authToken),
+            request,
           )
               .timeout(
             refreshTokenTimeout,
@@ -331,7 +346,7 @@ Map<String, String> _defaultRefreshTokenResponseParser(String body) {
   return tokens;
 }
 
-Map<String, String> _defaultCustomRefreshTokenRequestBodyMapper(String refreshToken, String accessToken) {
+Map<String, String> _defaultCustomRefreshTokenRequestBodyFieldsMapper(String refreshToken, String accessToken) {
   return {
     "refreshToken": refreshToken,
   };
