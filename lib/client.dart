@@ -33,6 +33,9 @@ class HttpAuthClient implements http.Client {
   /// API endpoint using Client.body
   late FutureOr<String> Function(String refreshToken, String authToken)? customRefreshTokenRequestBodyMapper;
 
+  /// Provides a way to customize the [http.Request] before being "send", here you can set new fields or custom headers, maybe change the Method
+  final Future<http.Request> Function(http.Request request)? customRefreshTokenRequestWrapper;
+
   /// Defines the 'http' (POST, PUT, etc) method to be used when requesting a new token to the API
   /// defaults to 'POST'
   late String refreshTokenMethod;
@@ -73,6 +76,7 @@ class HttpAuthClient implements http.Client {
     this.onRefreshToken,
     this.onRefreshTokenFailure,
     this.customRefreshTokenCallback,
+    this.customRefreshTokenRequestWrapper,
   }) : assert(
           refreshTokenUrl == null || customRefreshTokenCallback == null,
           "You cannot define both 'refreshTokenUrl' & 'customRefreshTokenCallback' since the latest will override refresh logic behavior",
@@ -268,7 +272,7 @@ class HttpAuthClient implements http.Client {
         if (customRefreshTokenCallback != null) {
           data = await (customRefreshTokenCallback!(authToken, refreshToken));
         } else {
-          final request = http.Request(
+          var request = http.Request(
             refreshTokenMethod,
             Uri.parse((this.refreshTokenUrl!.call(refreshToken!, decoded))),
           );
@@ -278,6 +282,12 @@ class HttpAuthClient implements http.Client {
           } else {
             request.bodyFields = await refreshTokenRequestBodyFieldsMapper(refreshToken, authToken);
           }
+
+          request.headers.addAll({
+            AuthHttpClientKeys.noAuthenticateOverride: "true",
+          });
+
+          request = await customRefreshTokenRequestWrapper?.call(request) ?? request;
 
           final sres = await this
               .send(
