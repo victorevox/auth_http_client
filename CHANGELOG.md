@@ -1,3 +1,6 @@
+## [1.3.1] - 31/06/23
+* Added customRefreshTokenRequestWrapper to customize how request is sent to API
+
 ## [1.3.0] - 21/06/23
 * Added 'customRefreshTokenRequestBodyMapper'
 * Renamed  refreshTokenRequestBodyMapper to refreshTokenRequestBodyFieldsMapper
